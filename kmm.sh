@@ -18,13 +18,14 @@ CF_BIN="/usr/local/bin/cloudflared"
 if [ -t 1 ]; then
     C_RED='\033[0;31m'
     C_GREEN='\033[0;32m'
+    C_BRIGHT_GREEN='\033[1;32m'
     C_YELLOW='\033[0;33m'
     C_BLUE='\033[0;34m'
     C_CYAN='\033[0;36m'
     C_BOLD='\033[1m'
     C_NC='\033[0m'
 else
-    C_RED=""; C_GREEN=""; C_YELLOW=""; C_BLUE=""; C_CYAN=""; C_BOLD=""; C_NC=""
+    C_RED=""; C_GREEN=""; C_BRIGHT_GREEN=""; C_YELLOW=""; C_BLUE=""; C_CYAN=""; C_BOLD=""; C_NC=""
 fi
 
 cecho() {
@@ -36,7 +37,7 @@ cecho() {
 # log()/err() 输出到 stderr，避免污染被 $(...) 捕获的函数返回值
 log()  { printf "%b[Komari]%b %s\n" "$C_BLUE" "$C_NC" "$1" >&2; }
 warn() { printf "%b[Komari] ⚠️  %s%b\n" "$C_YELLOW" "$1" "$C_NC" >&2; }
-ok()   { printf "%b[Komari] ✅ %s%b\n" "$C_GREEN" "$1" "$C_NC" >&2; }
+ok()   { printf "%b[Komari] ✅ %s%b\n" "$C_BRIGHT_GREEN" "$1" "$C_NC" >&2; }
 err()  { printf "%b[Komari] ❌ %s%b\n" "$C_RED" "$1" "$C_NC" >&2; exit 1; }
 
 # --------------------------------------------------------------
@@ -249,10 +250,10 @@ do_install() {
     fi
 
     sleep 2
-    cecho "$C_GREEN$C_BOLD" "================================================"
-    cecho "$C_GREEN$C_BOLD" "✅ 部署完成"
+    cecho "$C_BRIGHT_GREEN" "================================================"
+    cecho "$C_BRIGHT_GREEN" "✅ 部署完成"
     cecho "$C_CYAN" "🔍 查看初始密码: grep -E 'Password|User' ${KOMARI_LOG}"
-    cecho "$C_GREEN$C_BOLD" "================================================"
+    cecho "$C_BRIGHT_GREEN" "================================================"
 }
 
 # --------------------------------------------------------------
@@ -289,10 +290,10 @@ do_upgrade() {
 
     if svc_start komari; then
         sleep 2
-        cecho "$C_GREEN$C_BOLD" "================================================"
-        cecho "$C_GREEN$C_BOLD" "✅ 升级完成！请刷新网页查看版本号。"
+        cecho "$C_BRIGHT_GREEN" "================================================"
+        cecho "$C_BRIGHT_GREEN" "✅ 升级完成！请刷新网页查看版本号。"
         cecho "$C_CYAN" "   如需回滚: mv ${KOMARI_BIN}.bak ${KOMARI_BIN} && 重启服务"
-        cecho "$C_GREEN$C_BOLD" "================================================"
+        cecho "$C_BRIGHT_GREEN" "================================================"
     else
         warn "新版本启动失败，正在自动回滚..."
         mv "${KOMARI_BIN}.bak" "$KOMARI_BIN"
@@ -329,9 +330,9 @@ do_change_token() {
             ;;
     esac
 
-    cecho "$C_GREEN$C_BOLD" "================================================"
-    cecho "$C_GREEN$C_BOLD" "✅ Token 已更新并重启 cloudflared 服务。"
-    cecho "$C_GREEN$C_BOLD" "================================================"
+    cecho "$C_BRIGHT_GREEN" "================================================"
+    cecho "$C_BRIGHT_GREEN" "✅ Token 已更新并重启 cloudflared 服务。"
+    cecho "$C_BRIGHT_GREEN" "================================================"
 }
 
 # --------------------------------------------------------------
@@ -400,12 +401,12 @@ do_uninstall() {
 
     rm -f /run/komari.pid /run/cloudflared.pid
 
-    cecho "$C_GREEN$C_BOLD" "------------------------------------------------"
-    cecho "$C_GREEN$C_BOLD" "✅ 卸载完成。"
+    cecho "$C_BRIGHT_GREEN" "------------------------------------------------"
+    cecho "$C_BRIGHT_GREEN" "✅ 卸载完成。"
     if [ "$had_backups" = "y" ] && [ "$remove_backups" != "y" ] && [ "$remove_backups" != "Y" ]; then
         cecho "$C_CYAN" "   备份目录已保留在 ${KOMARI_DIR}"
     fi
-    cecho "$C_GREEN$C_BOLD" "------------------------------------------------"
+    cecho "$C_BRIGHT_GREEN" "------------------------------------------------"
 }
 
 # --------------------------------------------------------------
@@ -444,7 +445,7 @@ if [ "$CURRENT_VER" = "未安装" ]; then
     VER_COLOR="$C_YELLOW"
 elif [ "$CURRENT_VER" != "未知（无法获取）" ] && [ "$LATEST_VER" != "未知（无法获取，请检查网络）" ]; then
     case "$CURRENT_VER" in
-        *"$LATEST_VER"*) VER_NOTE=" (已是最新)"; VER_COLOR="$C_GREEN" ;;
+        *"$LATEST_VER"*) VER_NOTE=" (已是最新)"; VER_COLOR="$C_BRIGHT_GREEN" ;;
         *) VER_NOTE=" (有更新可用)"; VER_COLOR="$C_YELLOW" ;;
     esac
 fi
@@ -455,11 +456,11 @@ cecho "$C_CYAN"        "------------------------------------------------"
 printf " 当前版本: %b%s%b\n" "$VER_COLOR" "$CURRENT_VER" "$C_NC"
 printf " 最新版本: %b%s%s%b\n" "$VER_COLOR" "$LATEST_VER" "$VER_NOTE" "$C_NC"
 cecho "$C_CYAN"        "------------------------------------------------"
-printf "  %b1)%b 部署安装\n"            "$C_GREEN" "$C_NC"
-printf "  %b2)%b 升级 Komari\n"          "$C_YELLOW" "$C_NC"
-printf "  %b3)%b 更换 Cloudflare Token\n" "$C_BLUE" "$C_NC"
-printf "  %b4)%b 卸载\n"                 "$C_RED" "$C_NC"
-printf "  %b0)%b 退出\n"                 "$C_NC" "$C_NC"
+printf "  %b1) 部署安装%b\n"            "$C_BRIGHT_GREEN" "$C_NC"
+printf "  %b2) 升级 Komari%b\n"          "$C_BRIGHT_GREEN" "$C_NC"
+printf "  %b3) 更换 Cloudflare Token%b\n" "$C_BRIGHT_GREEN" "$C_NC"
+printf "  %b4) 卸载%b\n"                 "$C_BRIGHT_GREEN" "$C_NC"
+printf "  %b0) 退出%b\n"                 "$C_BRIGHT_GREEN" "$C_NC"
 cecho "$C_BOLD$C_CYAN" "================================================"
 printf "%b请选择操作 [0-4]: %b" "$C_CYAN" "$C_NC"
 read -r choice
