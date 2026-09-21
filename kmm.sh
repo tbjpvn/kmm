@@ -12,9 +12,32 @@ KOMARI_LOG="/var/log/komari.log"
 CLOUDFLARED_LOG="/var/log/cloudflared.log"
 CF_BIN="/usr/local/bin/cloudflared"
 
-# 注意: log() 输出到 stderr，避免污染被 $(...) 捕获的函数返回值
-log()  { echo "[Komari] $1" >&2; }
-err()  { echo "[Komari] ❌ $1" >&2; exit 1; }
+# --------------------------------------------------------------
+# 颜色定义（非终端环境下自动禁用，例如输出被重定向到文件时）
+# --------------------------------------------------------------
+if [ -t 1 ]; then
+    C_RED='\033[0;31m'
+    C_GREEN='\033[0;32m'
+    C_YELLOW='\033[0;33m'
+    C_BLUE='\033[0;34m'
+    C_CYAN='\033[0;36m'
+    C_BOLD='\033[1m'
+    C_NC='\033[0m'
+else
+    C_RED=""; C_GREEN=""; C_YELLOW=""; C_BLUE=""; C_CYAN=""; C_BOLD=""; C_NC=""
+fi
+
+cecho() {
+    # 用法: cecho <颜色变量> <文字>
+    color="$1"; shift
+    printf "%b%s%b\n" "$color" "$*" "$C_NC"
+}
+
+# log()/err() 输出到 stderr，避免污染被 $(...) 捕获的函数返回值
+log()  { printf "%b[Komari]%b %s\n" "$C_BLUE" "$C_NC" "$1" >&2; }
+warn() { printf "%b[Komari] ⚠️  %s%b\n" "$C_YELLOW" "$1" "$C_NC" >&2; }
+ok()   { printf "%b[Komari] ✅ %s%b\n" "$C_GREEN" "$1" "$C_NC" >&2; }
+err()  { printf "%b[Komari] ❌ %s%b\n" "$C_RED" "$1" "$C_NC" >&2; exit 1; }
 
 # --------------------------------------------------------------
 # 权限检查
@@ -170,14 +193,14 @@ EOF
 # --------------------------------------------------------------
 do_install() {
     if [ -z "$CF_TOKEN" ]; then
-        printf "请输入 Cloudflare Tunnel Token: "
+        printf "%b请输入 Cloudflare Tunnel Token: %b" "$C_CYAN" "$C_NC"
         read -r CF_TOKEN
     fi
     [ -z "$CF_TOKEN" ] && err "Token 不能为空。"
 
     RESET_DATA="n"
     if [ -d "${KOMARI_DIR}/data" ]; then
-        printf "检测到已存在的数据目录，是否清空并重置密码？[y/N]: "
+        printf "%b检测到已存在的数据目录，是否清空并重置密码？[y/N]: %b" "$C_YELLOW" "$C_NC"
         read -r RESET_DATA
     fi
 
@@ -226,10 +249,10 @@ do_install() {
     fi
 
     sleep 2
-    echo "================================================"
-    echo "✅ 部署完成"
-    echo "🔍 查看初始密码: grep -E 'Password|User' ${KOMARI_LOG}"
-    echo "================================================"
+    cecho "$C_GREEN$C_BOLD" "================================================"
+    cecho "$C_GREEN$C_BOLD" "✅ 部署完成"
+    cecho "$C_CYAN" "🔍 查看初始密码: grep -E 'Password|User' ${KOMARI_LOG}"
+    cecho "$C_GREEN$C_BOLD" "================================================"
 }
 
 # --------------------------------------------------------------
@@ -266,12 +289,12 @@ do_upgrade() {
 
     if svc_start komari; then
         sleep 2
-        echo "================================================"
-        echo "✅ 升级完成！请刷新网页查看版本号。"
-        echo "   如需回滚: mv ${KOMARI_BIN}.bak ${KOMARI_BIN} && 重启服务"
-        echo "================================================"
+        cecho "$C_GREEN$C_BOLD" "================================================"
+        cecho "$C_GREEN$C_BOLD" "✅ 升级完成！请刷新网页查看版本号。"
+        cecho "$C_CYAN" "   如需回滚: mv ${KOMARI_BIN}.bak ${KOMARI_BIN} && 重启服务"
+        cecho "$C_GREEN$C_BOLD" "================================================"
     else
-        log "⚠️  新版本启动失败，正在自动回滚..."
+        warn "新版本启动失败，正在自动回滚..."
         mv "${KOMARI_BIN}.bak" "$KOMARI_BIN"
         svc_start komari
         err "升级失败，已自动回滚至旧版本。"
@@ -282,7 +305,7 @@ do_upgrade() {
 # 功能 3：更换 Token（复用 write_*_units，避免用 sed 正则改配置的脆弱性）
 # --------------------------------------------------------------
 do_change_token() {
-    printf "请输入新的 Cloudflare Tunnel Token: "
+    printf "%b请输入新的 Cloudflare Tunnel Token: %b" "$C_CYAN" "$C_NC"
     read -r NEW_TOKEN
     [ -z "$NEW_TOKEN" ] && err "Token 不能为空。"
 
@@ -306,30 +329,30 @@ do_change_token() {
             ;;
     esac
 
-    echo "================================================"
-    echo "✅ Token 已更新并重启 cloudflared 服务。"
-    echo "================================================"
+    cecho "$C_GREEN$C_BOLD" "================================================"
+    cecho "$C_GREEN$C_BOLD" "✅ Token 已更新并重启 cloudflared 服务。"
+    cecho "$C_GREEN$C_BOLD" "================================================"
 }
 
 # --------------------------------------------------------------
 # 功能 4：卸载
 # --------------------------------------------------------------
 do_uninstall() {
-    echo "⚠️  此操作将停止并删除 Komari 及相关服务、数据。"
-    printf "确定要继续吗？[y/N]: "
+    cecho "$C_RED$C_BOLD" "⚠️  此操作将停止并删除 Komari 及相关服务、数据。"
+    printf "%b确定要继续吗？[y/N]: %b" "$C_YELLOW" "$C_NC"
     read -r confirm
     case "$confirm" in
         y|Y) : ;;
         *) log "已取消。"; return 0 ;;
     esac
 
-    printf "是否同时删除 cloudflared 二进制？如果本机还有其他 Tunnel 在用它，请选 N。[y/N]: "
+    printf "%b是否同时删除 cloudflared 二进制？如果本机还有其他 Tunnel 在用它，请选 N。[y/N]: %b" "$C_YELLOW" "$C_NC"
     read -r remove_cf
 
     had_backups="n"
     if ls -d "${KOMARI_DIR}"/data_backup_* >/dev/null 2>&1; then
         had_backups="y"
-        printf "检测到历史备份目录 (data_backup_*)，是否一并删除？[y/N]: "
+        printf "%b检测到历史备份目录 (data_backup_*)，是否一并删除？[y/N]: %b" "$C_YELLOW" "$C_NC"
         read -r remove_backups
     else
         remove_backups="n"
@@ -353,7 +376,7 @@ do_uninstall() {
             rm -f /etc/init.d/komari /etc/init.d/cloudflared
             ;;
         *)
-            log "⚠️  未识别的初始化系统，跳过服务清理，请手动检查是否有残留的 komari/cloudflared 进程。"
+            warn "未识别的初始化系统，跳过服务清理，请手动检查是否有残留的 komari/cloudflared 进程。"
             ;;
     esac
 
@@ -377,12 +400,12 @@ do_uninstall() {
 
     rm -f /run/komari.pid /run/cloudflared.pid
 
-    echo "------------------------------------------------"
-    echo "✅ 卸载完成。"
+    cecho "$C_GREEN$C_BOLD" "------------------------------------------------"
+    cecho "$C_GREEN$C_BOLD" "✅ 卸载完成。"
     if [ "$had_backups" = "y" ] && [ "$remove_backups" != "y" ] && [ "$remove_backups" != "Y" ]; then
-        echo "   备份目录已保留在 ${KOMARI_DIR}"
+        cecho "$C_CYAN" "   备份目录已保留在 ${KOMARI_DIR}"
     fi
-    echo "------------------------------------------------"
+    cecho "$C_GREEN$C_BOLD" "------------------------------------------------"
 }
 
 # --------------------------------------------------------------
@@ -415,27 +438,30 @@ get_latest_version() {
 CURRENT_VER=$(get_current_version)
 LATEST_VER=$(get_latest_version)
 
+VER_COLOR="$C_CYAN"
 VER_NOTE=""
-if [ "$CURRENT_VER" != "未安装" ] && [ "$CURRENT_VER" != "未知（无法获取）" ] && [ "$LATEST_VER" != "未知（无法获取，请检查网络）" ]; then
+if [ "$CURRENT_VER" = "未安装" ]; then
+    VER_COLOR="$C_YELLOW"
+elif [ "$CURRENT_VER" != "未知（无法获取）" ] && [ "$LATEST_VER" != "未知（无法获取，请检查网络）" ]; then
     case "$CURRENT_VER" in
-        *"$LATEST_VER"*) VER_NOTE=" (已是最新)" ;;
-        *) VER_NOTE=" (有更新可用)" ;;
+        *"$LATEST_VER"*) VER_NOTE=" (已是最新)"; VER_COLOR="$C_GREEN" ;;
+        *) VER_NOTE=" (有更新可用)"; VER_COLOR="$C_YELLOW" ;;
     esac
 fi
 
-echo "================================================"
-echo " Komari 管理脚本"
-echo "------------------------------------------------"
-echo " 当前版本: ${CURRENT_VER}"
-echo " 最新版本: ${LATEST_VER}${VER_NOTE}"
-echo "------------------------------------------------"
-echo "  1) 部署安装"
-echo "  2) 升级 Komari"
-echo "  3) 更换 Cloudflare Token"
-echo "  4) 卸载"
-echo "  0) 退出"
-echo "================================================"
-printf "请选择操作 [0-4]: "
+cecho "$C_BOLD$C_CYAN" "================================================"
+cecho "$C_BOLD$C_CYAN" " Komari 管理脚本"
+cecho "$C_CYAN"        "------------------------------------------------"
+printf " 当前版本: %b%s%b\n" "$VER_COLOR" "$CURRENT_VER" "$C_NC"
+printf " 最新版本: %b%s%s%b\n" "$VER_COLOR" "$LATEST_VER" "$VER_NOTE" "$C_NC"
+cecho "$C_CYAN"        "------------------------------------------------"
+printf "  %b1)%b 部署安装\n"            "$C_GREEN" "$C_NC"
+printf "  %b2)%b 升级 Komari\n"          "$C_YELLOW" "$C_NC"
+printf "  %b3)%b 更换 Cloudflare Token\n" "$C_BLUE" "$C_NC"
+printf "  %b4)%b 卸载\n"                 "$C_RED" "$C_NC"
+printf "  %b0)%b 退出\n"                 "$C_NC" "$C_NC"
+cecho "$C_BOLD$C_CYAN" "================================================"
+printf "%b请选择操作 [0-4]: %b" "$C_CYAN" "$C_NC"
 read -r choice
 
 case "$choice" in
