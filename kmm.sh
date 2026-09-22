@@ -252,7 +252,10 @@ do_install() {
     sleep 2
     cecho "$C_BRIGHT_GREEN" "================================================"
     cecho "$C_BRIGHT_GREEN" "✅ 部署完成"
-    cecho "$C_CYAN" "🔍 查看初始密码: grep -E 'Password|User' ${KOMARI_LOG}"
+    cecho "$C_CYAN" "🔍 首次访问 http://<你的服务器IP>:25774"
+    cecho "$C_CYAN" "   1.3.0 及以后版本：请在网页端通过安装向导创建管理员账号"
+    cecho "$C_CYAN" "   若是更早版本：初始账号密码可能在日志中，可尝试："
+    cecho "$C_CYAN" "   grep -E 'Password|User' ${KOMARI_LOG}"
     cecho "$C_BRIGHT_GREEN" "================================================"
 }
 
@@ -464,6 +467,7 @@ cecho "$C_BOLD$C_CYAN" " Komari 管理脚本"
 cecho "$C_CYAN"        "------------------------------------------------"
 printf " 当前版本: %b%s%b\n" "$VER_COLOR" "$CURRENT_VER" "$C_NC"
 printf " 最新版本: %b%s%s%b\n" "$VER_COLOR" "$LATEST_VER" "$VER_NOTE" "$C_NC"
+cecho "$C_YELLOW"      " 注：官方仓库 komari-monitor/komari 已于 2026-09 归档，1.5.0-fix1 是最终版本，不会再更新。"
 cecho "$C_CYAN"        "------------------------------------------------"
 printf "  %b1) 部署安装%b\n"            "$C_BRIGHT_GREEN" "$C_NC"
 printf "  %b2) 升级 Komari%b\n"          "$C_BRIGHT_GREEN" "$C_NC"
