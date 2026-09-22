@@ -367,6 +367,7 @@ do_uninstall() {
             systemctl disable komari cloudflared 2>/dev/null || true
             rm -f /etc/systemd/system/komari.service /etc/systemd/system/cloudflared.service
             systemctl daemon-reload || true
+            systemctl reset-failed komari cloudflared 2>/dev/null || true
             ;;
         openrc)
             log "检测到 OpenRC，正在停止并移除服务..."
@@ -391,6 +392,8 @@ do_uninstall() {
         # 明确删除主程序本身及其备份、data 目录，不用名称排除法（避免目录与二进制同名 "komari" 导致误伤保留）
         rm -f "${KOMARI_BIN}" "${KOMARI_BIN}.bak"
         rm -rf "${KOMARI_DIR}/data"
+        # 如果目录已经空了（没有需要保留的备份），顺手删掉，不留空文件夹
+        rmdir "$KOMARI_DIR" 2>/dev/null || true
     fi
 
     if [ "$remove_cf" = "y" ] || [ "$remove_cf" = "Y" ]; then
@@ -399,6 +402,8 @@ do_uninstall() {
         log "已保留 ${CF_BIN}"
     fi
 
+    # 日志文件一并清理
+    rm -f "$KOMARI_LOG" "$CLOUDFLARED_LOG"
     rm -f /run/komari.pid /run/cloudflared.pid
 
     cecho "$C_BRIGHT_GREEN" "------------------------------------------------"
@@ -406,6 +411,10 @@ do_uninstall() {
     if [ "$had_backups" = "y" ] && [ "$remove_backups" != "y" ] && [ "$remove_backups" != "Y" ]; then
         cecho "$C_CYAN" "   备份目录已保留在 ${KOMARI_DIR}"
     fi
+    if [ "$remove_cf" != "y" ] && [ "$remove_cf" != "Y" ]; then
+        cecho "$C_CYAN" "   cloudflared 二进制已保留在 ${CF_BIN}"
+    fi
+    cecho "$C_CYAN" "   注：本脚本未卸载 curl/wget 等系统依赖包；如果本机还有其他非本脚本创建的 cloudflared 配置（如 /etc/cloudflared 或 ~/.cloudflared），也不会被触碰。"
     cecho "$C_BRIGHT_GREEN" "------------------------------------------------"
 }
 
