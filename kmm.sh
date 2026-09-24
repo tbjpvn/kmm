@@ -71,13 +71,35 @@ detect_arch() {
     esac
 }
 
-# 带超时的执行，避免目标程序不支持某参数时卡死脚本
+# 带超时的执行，避免目标程序不支持某参数时卡死脚本（目前脚本内已不再依赖它探测版本，
+# 保留作为通用工具函数）
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then
         timeout 5 "$@"
     else
         "$@"
     fi
+}
+
+# 检测某个可执行文件对应的进程是否在运行（不依赖 systemd/OpenRC，直接查进程表）
+process_running() {
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f "$1" >/dev/null 2>&1
+    else
+        ps aux 2>/dev/null | grep -F "$1" | grep -v grep >/dev/null 2>&1
+    fi
+}
+
+# 升级/部署后的健康检查：确认进程真的在跑，并尽量做一次 HTTP 探测（仅供参考，不作为失败依据，
+# 因为监听端口可能被自定义过，本脚本并不追踪 -l 参数）
+wait_for_healthy() {
+    sleep 2
+    process_running "$KOMARI_BIN" || return 1
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -o /dev/null --max-time 3 "http://127.0.0.1:25774/" \
+            || warn "HTTP 健康检查未连通 :25774（如自定义了监听端口可忽略此提示，只要进程在跑就没问题）"
+    fi
+    return 0
 }
 
 # 下载到临时文件并校验，成功后返回临时文件路径（不直接覆盖目标）
@@ -279,26 +301,23 @@ do_upgrade() {
     cp "$KOMARI_BIN" "${KOMARI_BIN}.bak"
     log "旧版本二进制已备份为 ${KOMARI_BIN}.bak"
 
-    # 下载并验证新版本，验证通过才替换
+    # 下载并校验新版本（komari 不支持无副作用的 --version 检测——传这个参数会直接启动服务，
+    # 所以不在替换前"跑一下试试"，而是替换后启动、做健康检查，失败自动回滚）
     tmp_new=$(download_and_verify "https://github.com/komari-monitor/komari/releases/latest/download/komari-linux-${ARCH}" "komari 新版本")
-
-    if ! run_with_timeout "$tmp_new" --version >/dev/null 2>&1; then
-        rm -f "$tmp_new"
-        err "新版本二进制无法正常执行，已中止升级，旧版本未受影响。"
-    fi
 
     svc_stop komari
     mv "$tmp_new" "$KOMARI_BIN"
     chmod +x "$KOMARI_BIN"
 
-    if svc_start komari; then
-        sleep 2
+    if svc_start komari && wait_for_healthy; then
+        NEW_VER=$(get_current_version)
         cecho "$C_BRIGHT_GREEN" "================================================"
-        cecho "$C_BRIGHT_GREEN" "✅ 升级完成！请刷新网页查看版本号。"
+        cecho "$C_BRIGHT_GREEN" "✅ 升级完成！当前运行版本: ${NEW_VER}"
         cecho "$C_CYAN" "   如需回滚: mv ${KOMARI_BIN}.bak ${KOMARI_BIN} && 重启服务"
         cecho "$C_BRIGHT_GREEN" "================================================"
     else
-        warn "新版本启动失败，正在自动回滚..."
+        warn "新版本启动异常，正在自动回滚..."
+        svc_stop komari 2>/dev/null || true
         mv "${KOMARI_BIN}.bak" "$KOMARI_BIN"
         svc_start komari
         err "升级失败，已自动回滚至旧版本。"
@@ -425,11 +444,20 @@ do_uninstall() {
 # 版本信息
 # --------------------------------------------------------------
 get_current_version() {
-    if [ -x "$KOMARI_BIN" ]; then
-        ver=$(run_with_timeout "$KOMARI_BIN" --version 2>/dev/null | head -n1) || ver=""
-        if [ -n "$ver" ]; then echo "$ver"; else echo "未知（无法获取）"; fi
-    else
+    if [ ! -x "$KOMARI_BIN" ]; then
         echo "未安装"
+        return
+    fi
+    ver=""
+    if [ -f "$KOMARI_LOG" ]; then
+        # 服务自己启动时会在日志里打一行 "... Komari Monitor <版本号> (hash: ...)"，直接从这里取，
+        # 不再另起进程去问版本——起进程会跟正在跑的服务抢端口、抢数据库锁
+        ver=$(grep -o 'Komari Monitor [^ ]*' "$KOMARI_LOG" 2>/dev/null | tail -n1 | awk '{print $3}') || ver=""
+    fi
+    if [ -n "$ver" ]; then
+        echo "$ver"
+    else
+        echo "未知（服务尚未启动过，或日志中无版本信息）"
     fi
 }
 
@@ -455,7 +483,7 @@ VER_COLOR="$C_CYAN"
 VER_NOTE=""
 if [ "$CURRENT_VER" = "未安装" ]; then
     VER_COLOR="$C_YELLOW"
-elif [ "$CURRENT_VER" != "未知（无法获取）" ] && [ "$LATEST_VER" != "未知（无法获取，请检查网络）" ]; then
+elif [ "$CURRENT_VER" != "未知（服务尚未启动过，或日志中无版本信息）" ] && [ "$LATEST_VER" != "未知（无法获取，请检查网络）" ]; then
     case "$CURRENT_VER" in
         *"$LATEST_VER"*) VER_NOTE=" (已是最新)"; VER_COLOR="$C_BRIGHT_GREEN" ;;
         *) VER_NOTE=" (有更新可用)"; VER_COLOR="$C_YELLOW" ;;
